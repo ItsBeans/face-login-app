@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import * as faceapi from "face-api.js";
+import { db, doc, setDoc, getDoc } from "../firebase/firebaseConfig"; 
 
 const FaceLogin = () => {
   const videoRef = useRef(null);
@@ -38,18 +39,26 @@ const FaceLogin = () => {
       return;
     }
   
-    const descriptorArray = Array.from(detections.descriptor); // Convert Float32Array to a normal array
-    localStorage.setItem("faceDescriptor", JSON.stringify(descriptorArray));
-    setSavedDescriptor(detections.descriptor);
-    alert("Face saved! You can now log in.");
+    const descriptorArray = Array.from(detections.descriptor);
+  
+    try {
+      await setDoc(doc(db, "users", "user1"), { faceDescriptor: descriptorArray });
+      alert("Face saved in Firebase!");
+    } catch (error) {
+      console.error("Error saving face data:", error);
+    }
   };
   
   const verifyFace = async () => {
-    const storedDescriptor = localStorage.getItem("faceDescriptor");
-    if (!storedDescriptor) {
+    const docRef = doc(db, "users", "user1");
+    const docSnap = await getDoc(docRef);
+  
+    if (!docSnap.exists()) {
       alert("No saved face data. Please register first.");
       return;
     }
+  
+    const storedDescriptor = new Float32Array(docSnap.data().faceDescriptor);
   
     const video = videoRef.current;
     const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
@@ -61,11 +70,7 @@ const FaceLogin = () => {
       return;
     }
   
-    // Convert stored descriptor back to Float32Array
-    const parsedDescriptor = new Float32Array(JSON.parse(storedDescriptor));
-  
-    // Use FaceMatcher with a valid LabeledFaceDescriptors
-    const labeledDescriptors = [new faceapi.LabeledFaceDescriptors("User", [parsedDescriptor])];
+    const labeledDescriptors = [new faceapi.LabeledFaceDescriptors("User", [storedDescriptor])];
     const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors);
   
     const bestMatch = faceMatcher.findBestMatch(detections.descriptor);
